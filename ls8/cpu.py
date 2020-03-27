@@ -5,8 +5,11 @@ LDI = 0b10000010
 PRN = 0b01000111
 HLT = 0b00000001
 MUL = 0b10100010
+ADD = 0b10100000
 PUSH = 0b01000101
 POP = 0b01000110
+CALL = 0b01010000
+RET = 0b00010001
 SP = 7
 class CPU:
     """Main CPU class."""
@@ -16,13 +19,17 @@ class CPU:
         self.ram = [0] * 256
         self.reg = [0] * 8
         self.pc = 0
-        self.branchtable = {}
-        self.branchtable[HLT] = self.handle_hlt
-        self.branchtable[LDI] = self.handle_ldi
-        self.branchtable[PRN] = self.handle_prn
-        self.branchtable[MUL] = self.handle_mul
-        self.branchtable[PUSH] = self.handle_push
-        self.branchtable[POP] = self.handle_pop
+        self.branchtable = {
+        HLT: self.handle_hlt,
+        LDI: self.handle_ldi,
+        PRN: self.handle_prn,
+        ADD: self.handle_add,
+        MUL: self.handle_mul,
+        PUSH: self.handle_push,
+        POP: self.handle_pop,
+        CALL: self.handle_call,
+        RET: self.handle_ret
+        }
         self.halted = False
         #register 7 is reserved as the stack pointer, which is 0xf4 per specs
         self.reg[SP] = 0xf4
@@ -86,6 +93,11 @@ class CPU:
         for i in range(8):
             print(" %02X" % self.reg[i], end='')
         print()
+    #method to handle adding
+    def handle_add(self):
+        operand_a = self.ram_read(self.pc + 1)
+        operand_b = self.ram_read(self.pc + 2)
+        self.alu("ADD", operand_a, operand_b)    
     def handle_ldi(self):
         operand_a = self.ram_read(self.pc + 1)
         operand_b = self.ram_read(self.pc + 2)
@@ -116,20 +128,31 @@ class CPU:
         self.reg[operand_a] = operand_b
         #increment the SP
         self.reg[SP] += 1
+    #method to handle subroutine calls
+    def handle_call(self):
+        #push address after call to top of stack
+        self.reg[SP] -= 1
+        self.ram[self.reg[SP]] = self.pc + 2
+        # set the pc to the given register
+        operand_a = self.ram_read(self.pc + 1)
+        self.pc = self.reg[operand_a]
+    #method to handle the return after a call
+    def handle_ret(self):
+        #return from subroutine
+        self.pc = self.ram[self.reg[SP]]
+        #pop the value from the stack and store in pc
+        self.reg[SP] += 1
     def run(self):
         while self.halted != True:
             IR = self.ram[self.pc]
-            val = IR
-            op_count = val >> 6
+            op_count = IR >> 6
             IR_length = op_count + 1
             self.branchtable[IR]()
-            # print(f'this is for op_count {op_count}')
-            # print(f'this is for IR_length {IR_length}')
-            # print(f'this is for branches {self.branchtable[IR]()}')
             if IR == 0 or None:
                 print(f"Unknown instructions and index {self.pc}")
                 sys.exit(1)
-            self.pc += IR_length
+            if IR != 80 and IR != 17:
+                self.pc += IR_length
     # def run(self):
     #     """Run the CPU."""
     #     #set running to True
